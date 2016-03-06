@@ -1,30 +1,29 @@
-from fn import _ as X
-from functools import partial
 from typing import Tuple, Dict, Union, Optional, NamedTuple, List, \
-        TypingMeta, Callable, Any, T
-from fn.iters import partition
-from toolz.dicttoolz import merge
-import itertools
-from pyparsing import Literal, Word, delimitedList
-t_params = {
-        Tuple :    X.__tuple_params__,
-        Dict  :    X.__parameters__,
-        Union :    X.__union_params__,
-        Optional : X.__union_params__[0],
-        List :     X.__parameters__
-}
+        Callable, Any, TypeVar
 
-is_GADT = lambda x:  hasattr(x, '_fields')
-is_NamedTuple = lambda x:  hasattr(x, '_fields')
-is_Settings = lambda x: False if not hasattr(x, '_field_types') else 'Settings' in str(x)
+from toolz.dicttoolz import merge
+T = TypeVar("T")
+t_params = {
+        Tuple :    lambda x: x.__tuple_params__,
+        Dict  :    lambda x: x.__parameters__,
+        Union :    lambda x: x.__union_params__,
+        Optional : lambda x: x.__union_params__[0],
+        List :     lambda x: x.__parameters__
+}
+TypeFilter = Callable[[type], bool]
+is_GADT = lambda x:  hasattr(x, '_fields') # type: TypeFilter
+is_NamedTuple = lambda x:  hasattr(x, '_fields') # type: TypeFilter
+is_Settings = lambda x: False if not hasattr(x, '_field_types') else 'Settings' in str(x) # type: TypeFilter
 primitives = [str   , int   , bool  , float , type(None), bytes ]
 # Ugh, want to use GADTs as positional arguments (e.g., `Fastq`),
 # But also for options arguments, can't simply pattern match off
 # of namedtuple in that case
 # pos_args, opt_args = dict(partition(lambda x: x[0] == 'opts', annotations.items()))
 # str needs to be generalized to T
-def traverse_type(x: TypingMeta, tfuncs:  Dict[str, Callable[[Any], T]]) -> T:
-   recur = lambda y: traverse_type(y, tfuncs)
+def traverse_type(x: type, tfuncs:  Dict[Union[Any,type], Callable[[Any], T]]) -> T:
+   # it's unclear how to type the below lambda because it's dependent on T,
+   # which is a type-parameter of the function & tfuncs
+   recur = lambda y: traverse_type(y, tfuncs) 
    if x in primitives:
        return tfuncs[x](x)
    elif is_NamedTuple(x):
@@ -42,7 +41,8 @@ def traverse_type(x: TypingMeta, tfuncs:  Dict[str, Callable[[Any], T]]) -> T:
            vals = map(recur, params)
            return tfuncs[_type](vals)
        else: # list-like
-           matches = list(filter(lambda k: k == x.__origin__, t_params.keys()))
+           match_listish = lambda k: k == x.__origin__ # type: Callable[[Any], bool]
+           matches = list(filter(match_listish, t_params.keys()))
            assert matches, "%s not in t_params" % x
            assert len(matches) == 1
            _type = matches[0]
@@ -51,21 +51,21 @@ def traverse_type(x: TypingMeta, tfuncs:  Dict[str, Callable[[Any], T]]) -> T:
            return tfuncs[_type](vals)
 
 just = lambda x: lambda: x
-def get_NamedTuple_name(x: NamedTuple) -> str:
+def get_NamedTuple_name(x: type) -> str:
     import re
     try:
         return re.compile("([^\.]+)[']>$").search(str(x)).groups()[0]
     except IndexError:
         return str(x) 
 
-def GADT(_name: str, **fields: TypingMeta) -> NamedTuple:
+def GADT(_name: str, **fields: type) -> NamedTuple:
     return NamedTuple(_name, fields.items())#fields.items())
 
-def Settings(_name: str, **fields: TypingMeta) -> NamedTuple:
+def Settings(_name: str, **fields: type) -> NamedTuple:
     return GADT(name+'Settings', **fields)
 
-def make_str_func(flag: str) -> Dict[str,Callable[[Any],str]]: # flag is empty in case of positional
-    just = lambda x: lambda _: x
+def make_str_func(flag: str) -> Dict[Any,Callable[[Any],str]]: # flag is empty in case of positional
+    just = lambda x: lambda _: x # type: Callable[[str], Callable[[Any], str]]
     flag = '--' + flag + ' ' 
     return {
             bool : just(flag),
@@ -89,6 +89,8 @@ def make_tostr_option(nt: NamedTuple) -> str:
 #@@@@@@@@@@@#
 # Interface #
 #@@@@@@@@@@@#
+# TODO: GADT function doesn't work, because MyPy can't handle dynamically generated types. It can handle NamedTuples, though.
+
 MiSeq = GADT("MiSeq")
 Roche454 = GADT("Roche454")
 IonTorrent = GADT("IonTorrent")
@@ -118,11 +120,16 @@ if __name__ == '__main__':
     # Where command.run() handles --help, printing usage statemetns, etc., and calling the function with the positional + optional arguments.
 
 '''
+def partition(pred: Callable[[T], bool], seq: List[T]) -> Tuple[List[T], List[T]]:
+    _not = lambda f: lambda x: not f(x) # type: Callable[[Callable[[T], bool]],Callable[[T], bool]]
+    return filter(_not(pred), seq), filter(pred, seq)
+
 def func(f1: Fastq, f2: Fastq, opts: TrimOpts) -> PairedEnd:
     print(f1, f2, opts)
 annotations = func.__annotations__
+del annotations['return']
 pos_args, opt_args = partition(lambda x: x[0] == 'opts', annotations.items())
-pos_args, opt_args = dict(list(pos_args)[:-1]), dict(opt_args) #exclude return type from pos_args
+pos_args, opt_args = dict(pos_args), dict(opt_args) #exclude return type from pos_args
 string =  ' '.join(map(make_tostr_positional, pos_args.values()))
 string += ' ' + ' '.join(map(make_tostr_option, opt_args.values()))
 print(string)
