@@ -1,7 +1,7 @@
 from fn import _ as X
 from functools import partial
 from typing import Tuple, Dict, Union, Optional, NamedTuple, List, \
-        TypingMeta, Callable, Any
+        TypingMeta, Callable, Any, T
 from fn.iters import partition
 from toolz.dicttoolz import merge
 import itertools
@@ -23,17 +23,12 @@ primitives = [str   , int   , bool  , float , type(None), bytes ]
 # of namedtuple in that case
 # pos_args, opt_args = dict(partition(lambda x: x[0] == 'opts', annotations.items()))
 # str needs to be generalized to T
-def traverse_type(x: TypingMeta, tfuncs:  Dict[str,Callable[[Any],str]]) -> str:
+def traverse_type(x: TypingMeta, tfuncs:  Dict[str, Callable[[Any], T]]) -> T:
    recur = lambda y: traverse_type(y, tfuncs)
    if x in primitives:
        return tfuncs[x](x)
-#   elif is_Settings(x):
-#       # NamedTuple isn't a type, so this can't be a subclass check
-#       vals = list(map(recur, x._field_types.values()))
-#       return tfuncs[NamedTuple](x, vals)
    elif is_NamedTuple(x):
-       return tfuncs[GADT](x)
-
+       return tfuncs[GADT](x) 
    elif issubclass(x, Union) and x.__union_params__[1] == type(None):
        #NOTE: Optional will get swallowed by Union otherwise,
        # because Optional is an alias for Union[T, None]
@@ -62,27 +57,14 @@ def get_NamedTuple_name(x: NamedTuple) -> str:
         return re.compile("([^\.]+)[']>$").search(str(x)).groups()[0]
     except IndexError:
         return str(x) 
-# add case for Enum (NamedTuple?), provided as 
-# Union[NamedTuple1, NamedTuple1]
-       
 
-#NOTE: oh, could simply use `traverse_type` because a function
-# is a `Callable`?
 def GADT(_name: str, **fields: TypingMeta) -> NamedTuple:
     return NamedTuple(_name, fields.items())#fields.items())
+
 def Settings(_name: str, **fields: TypingMeta) -> NamedTuple:
     return GADT(name+'Settings', **fields)
 
-TrimOpts = GADT('TrimOpts', 
-        paired=bool, trim_n=bool,  # not sure Optional[bool] makes sense
-        q=Optional[int], removebases=Optional[int])
-MakeFileType = lambda n,**kv: GADT(n, **merge(kv, {'name': str}))
-Fastq = MakeFileType('Fastq', ext='fastq')
-PairedEnd = Tuple[Fastq, Fastq]
-
-#TODO: needs to be paramaterizable based on positional/optional
-#def make_str_func(make_tostr, flag=''): 
-def make_str_func(flag: str) -> Dict[str,Callable[[Any],str]]:
+def make_str_func(flag: str) -> Dict[str,Callable[[Any],str]]: # flag is empty in case of positional
     just = lambda x: lambda _: x
     flag = '--' + flag + ' ' 
     return {
@@ -91,27 +73,35 @@ def make_str_func(flag: str) -> Dict[str,Callable[[Any],str]]:
             int  : just(flag + '<int>'),
             float  : just(flag + '<float>'),
             Optional : '[ {} ]'.format,
-            List : lambda xs: just(flag + '<{}...>'.format(x[0])),
+            List : lambda xs: '{}...'.format(next(xs)),
             GADT : lambda x: '<{}>'.format(get_NamedTuple_name(x)),
-            Union : lambda xs: '( {} )'.format(' | '.join( xs)), # these last two will add `--` to the front . . .
+            Union : lambda xs: flag + '( {} )'.format(' | '.join(xs)), # these last two will add `--` to the front . . .
             Tuple : lambda xs: '( {} )'.format(' '.join(xs)), 
             #NamedTuple : lambda xs: '( {} )'.format(' '.join(map(make_tostr, xs))), 
             #NamedTuple : lambda n,xs: '( {} )'.format(' '.join(xs)),
     }
-#make_tostr_positional = lambda x: traverse_type(x, make_str_func(make_tostr_positional)) # type: (TypingMeta) -> str
+
 make_tostr_positional = lambda x: traverse_type(x, make_str_func(''))
 def make_tostr_option(nt: NamedTuple) -> str:
     strings = [traverse_type(_type, make_str_func(field)) for field, _type in nt._field_types.items()]
     return ' '.join(strings)
-    #return itertools.starmap(' --{} {}'.format(nt_.fields, strings))
-
-
 
 #@@@@@@@@@@@#
 # Interface #
 #@@@@@@@@@@@#
+MiSeq = GADT("MiSeq")
+Roche454 = GADT("Roche454")
+IonTorrent = GADT("IonTorrent")
+Platform = Union[MiSeq,Roche454,IonTorrent]
+MakeFileType = lambda n,**kv: GADT(n, **merge(kv, {'name': str}))
+Fastq = MakeFileType('Fastq', ext='fastq')
+PairedEnd = Tuple[Fastq, Fastq]
 Fasta = MakeFileType('Fasta', ext='fasta') 
 SeqFile = Union[Fasta, Fastq]
+TrimOpts = GADT('TrimOpts', 
+        paired=bool, trim_n=bool,  # not sure Optional[bool] makes sense
+        q=Optional[int], removebases=Optional[int],
+        adapters=List[str], platforms=List[Platform])
 
 def trim_reads(fs: PairedEnd, opts: TrimOpts) -> PairedEnd:
     pass # do stuff with input
@@ -131,9 +121,9 @@ if __name__ == '__main__':
 def func(f1: Fastq, f2: Fastq, opts: TrimOpts) -> PairedEnd:
     print(f1, f2, opts)
 annotations = func.__annotations__
-#pos_args, opt_args = partition(is_GADT, annotations.values())
 pos_args, opt_args = partition(lambda x: x[0] == 'opts', annotations.items())
 pos_args, opt_args = dict(list(pos_args)[:-1]), dict(opt_args) #exclude return type from pos_args
 string =  ' '.join(map(make_tostr_positional, pos_args.values()))
 string += ' ' + ' '.join(map(make_tostr_option, opt_args.values()))
 print(string)
+#NOTE: could sort by type (booleans first) to make clearer
