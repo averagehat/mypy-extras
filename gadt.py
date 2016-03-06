@@ -4,10 +4,10 @@ from typing import *
 from fn.iters import partition
 from toolz.dicttoolz import merge
 from pyparsing import Literal, Word, delimitedList
-import typing
-print(typing.__file__)
-class Settings(NamedTuple): pass
-class ADT(NamedTuple): pass
+#class Settings(object): 
+#    __init__ = NamedTuple
+#class ADT(object): 
+#    __init__ = NamedTuple
 t_params = {
         Tuple :    X.__tuple_params__,
         Dict  :    X.__parameters__,
@@ -18,20 +18,26 @@ t_params = {
 
 Enum = 'Enum'
 is_GADT = lambda x:  hasattr(x, '_fields')
-
+is_NamedTuple = lambda x:  hasattr(x, '_fields')
+#is_GADT = lambda x: False if not hasattr(x, 'meta__type') else x.meta__type == 'GADT'
+#is_Settings = lambda x: False if not hasattr(x, 'meta__type') else x.meta__type == 'Settings'
+is_Settings = lambda x: False if not hasattr(x, '_field_types') else 'Settings' in str(x)
 primitives = [str   , int   , bool  , float , type(None), bytes ]
-
+# Ugh, want to use GADTs as positional arguments (e.g., `Fastq`),
+# But also for options arguments, can't simply pattern match off
+# of namedtuple in that case
+# pos_args, opt_args = dict(partition(lambda x: x[0] == 'opts', annotations.items()))
 def traverse_type(x, tfuncs):
    recur = lambda y: traverse_type(y, tfuncs)
    if x in primitives:
        return tfuncs[x]
-   elif is_GADT(x):
+   elif is_Settings(x):
        # NamedTuple isn't a type, so this can't be a subclass check
        vals = list(map(recur, x._field_types.values()))
-       if vals == []:
-           return tfuncs['Enum'](x)
-       #return tfuncs[NamedTuple](x, vals)
        return tfuncs[NamedTuple](x, vals)
+   elif is_NamedTuple(x):
+       return tfuncs[GADT](x)
+
    else: 
        matches = list(filter(lambda kv: issubclass(x, kv[0]), t_params.items()))
        if matches:
@@ -49,9 +55,10 @@ def traverse_type(x, tfuncs):
 
 just = lambda x: lambda: x
 def get_NamedTuple_name(x):
+    import re
     try:
-        return re.compile("([^\.]+)'>$").search(str(x)).groups()[0]
-    except:
+        return re.compile("([^\.]+)[']>$").search(str(x)).groups()[0]
+    except IndexError:
         return str(x) 
 # add case for Enum (NamedTuple?), provided as 
 # Union[NamedTuple1, NamedTuple1]
@@ -65,13 +72,16 @@ listOf = lambda x: delimitedList(x, ',') #.setAction(lambda s: s.split(',')) # n
 
 #NOTE: oh, could simply use `traverse_type` because a function
 # is a `Callable`?
-def GADT(name: str, **fields) -> NamedTuple:
-   return ADT(name, fields.items())
+def GADT(_name, **fields) -> NamedTuple:
+    return NamedTuple(_name, fields.items())#fields.items())
+def Settings(_name: str, **fields) -> NamedTuple:
+    return GADT(name+'Settings', **fields)
+
 TrimOpts = GADT('TrimOpts', 
         paired=Optional[bool], trim_n=Optional[bool], 
         q=Optional[int], removebases=Optional[int])
 #MakeFileType = lambda n,**kv: GADT(n, [('name', str)] + list(kv.items()))
-MakeFileType = lambda n,**kv: GADT(n, merge(kv, {'name', str}))
+MakeFileType = lambda n,**kv: GADT(n, **merge(kv, {'name': str}))
 Fastq = MakeFileType('Fastq', ext='fastq')
 PairedEnd = Tuple[Fastq, Fastq]
 
@@ -84,14 +94,16 @@ def make_str_func(make_tostr):
             Optional : '[ {} ]'.format,
             List : lambda xs: x[0] + '...',
             Enum : lambda x,_: get_NamedTuple_name(x),
-            NamedTuple : lambda xs: '( {} )'.format(' '.join(map(make_tostr, xs))), 
+            GADT : lambda x: get_NamedTuple_name(x),
+            #NamedTuple : lambda xs: '( {} )'.format(' '.join(map(make_tostr, xs))), 
+            NamedTuple : lambda n,xs: '( {} )'.format(' '.join(xs)),
             Tuple : lambda xs: '( {} )'.format(' '.join(map(make_tostr, xs))), 
             Union : lambda xs: '( {} )'.format(' | '.join(map(make_tostr, xs))) # these last two will add `--` to the front . . .
     }
 make_tostr_positional = lambda x: traverse_type(x, make_str_func(make_tostr_positional))
 def make_tostr_option(nt: NamedTuple) -> str:
     string = traverse_type(nt, make_str_func(make_tostr_option))
-    return '--{} {}'.format(get_NamedTuple_name(nt), string)
+    return ' --{} {}'.format(get_NamedTuple_name(nt), string)
 
 def handle_NT_parser(x, _):  # ingore resolved fields because have to convert them to parsers
        name = get_NamedTuple_name(x)
@@ -149,6 +161,9 @@ if __name__ == '__main__':
 def func(f1: Fastq, f2: Fastq, opts: TrimOpts) -> PairedEnd:
     print(f1, f2, opts)
 annotations = func.__annotations__
-pos_args, opt_args = partition(is_GADT, annotations.values())
-string =  ' '.join(map(make_tostr_positional, pos_args))
-string += ' '.join(map(make_tostr_option, opt_args))
+#pos_args, opt_args = partition(is_GADT, annotations.values())
+pos_args, opt_args = partition(lambda x: x[0] == 'opts', annotations.items())
+pos_args, opt_args = dict(pos_args), dict(opt_args)
+string =  ' '.join(map(make_tostr_positional, pos_args.values()))
+string += ' '.join(map(make_tostr_option, opt_args.values()))
+print(string)
