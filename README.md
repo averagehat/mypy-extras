@@ -46,5 +46,12 @@ Usage statement
 ```
 Commandline Parsing
 ```
-#TODO
+Works if you wrap everything that's required in the NamedTuple. Combining with positional arguments not yet working.
 ```
+
+###TODO:
+It should be possible to automate commandline testing using hypotypes + typarser. All possible commandline-combinations would get run and you could check the properties one at a time, i.e., --csv flag means output should be in csv format, etc. This could report the exact commandline string.
+
+parse/unparse tests for the parser/usage generator
+
+typesafe pipelines could be created by matching up the types of inputs (using ADTs, e.g. `CSVFile`, etc.) to form the DAG. 
