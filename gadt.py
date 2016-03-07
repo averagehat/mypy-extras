@@ -14,6 +14,7 @@ t_params = {
 primitives = [str   , int   , bool  , float , type(None), bytes ]
 
 is_NamedTuple = lambda x:  hasattr(x, '_fields') # type: Callable[[type], bool]
+is_Option = lambda x: issubclass(x, Union) and x.__union_params__[1] == type(None)
 
 def traverse_type(x: type, tfuncs:  Dict[Union[Any,type], Callable[[Any], T]]) -> T:
    # it's unclear how to type the below lambda because it's dependent on T,
@@ -23,7 +24,7 @@ def traverse_type(x: type, tfuncs:  Dict[Union[Any,type], Callable[[Any], T]]) -
        return tfuncs[x](x)
    elif is_NamedTuple(x):
        return tfuncs[NamedTuple](x) 
-   elif issubclass(x, Union) and x.__union_params__[1] == type(None):
+   elif is_Option(x):
        #NOTE: Optional will get swallowed by Union otherwise,
        # because Optional is an alias for Union[T, None]
        value = recur(x.__union_params__[0])
@@ -45,7 +46,6 @@ def traverse_type(x: type, tfuncs:  Dict[Union[Any,type], Callable[[Any], T]]) -
            vals = map(recur, params)
            return tfuncs[_type](vals)
        else:  # some other subclass
-           print(x)
            return tfuncs[object](x) 
 
 def make_str_func(flag: str) -> Dict[Any,Callable[[Any],str]]: # flag is empty in case of positional
@@ -75,14 +75,17 @@ def partition(pred: Callable[[T], bool], seq: List[T]) -> Tuple[List[T], List[T]
     return filter(_not(pred), seq), filter(pred, seq)
 #Fastq = NamedTuple('Fastq', [('name', str)])
 #NOTE: could sort by type (booleans first) to make clearer
-
-def gen_usage_for_function(func):
-    from operator import itemgetter as get
+from operator import itemgetter as get
+def get_file_options_args(func):
     annotations = func.__annotations__.copy()
     del annotations['return']
     pos_args, opt_args = partition(lambda x: x[0] == 'opts', annotations.items()) 
-    pos_args = map(get(1), pos_args) 
-    opt_args = map(get(1),  opt_args)
+    pos_args = list(map(get(1), pos_args) )
+    opt_args = list(map(get(1),  opt_args))
+    return pos_args, opt_args
+
+def gen_usage_for_function(func):
+    pos_args, opt_args = get_file_options_args(func)
     string =  ' '.join(map(make_tostr_positional, pos_args)) 
     string += ' ' 
     string += ' '.join(map(make_tostr_option, opt_args))
