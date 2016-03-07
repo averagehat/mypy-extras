@@ -1,7 +1,10 @@
-from pyparsing import delimitedList, Literal, Regex, Word, alphas
+from pyparsing import delimitedList, Literal, Regex, Word, alphas, White, ZeroOrMore
+from pyparsing import Optional as ParseOpt
 from gadt import * 
+from functools import reduce
+import operator
 from typing import * 
-listOf = lambda x: delimitedList(x, ',') #.setAction(lambda s: s.split(',')) # not sure how works if x has a setAction already
+listOf = lambda x: delimitedList(x, ' ') #.setAction(lambda s: s.split(',')) # not sure how works if x has a setAction already
 
         # NamedTuple represents args that are grouped together (by parens)
         # this is to enable grouped optional arguements, for example.
@@ -10,7 +13,6 @@ listOf = lambda x: delimitedList(x, ',') #.setAction(lambda s: s.split(',')) # n
 #make_positional_parser = traverse_type(_type, opt_parse_funcs)
 
 #TODO: Need an outer-most function which won't add an --to the front.
-
 def handle_NT_parser(x, _):  # ingore resolved fields because have to convert them to parsers
        name = x.__name__
        if resolved_fields == []:  # treat as Enum
@@ -22,19 +24,22 @@ def handle_NT_parser(x, _):  # ingore resolved fields because have to convert th
 def make_option_parser(name: str, type: type) -> None: 
     long = Literal('--').suppress()
     short = Literal('-').suppress()
-    flag = (long + (Literal(name))).leaveWhitespace() | (short + Literal(name[0])).leaveWhitespace()
+    flag = (long + (Literal(name)).leaveWhitespace() | (short + Literal(name[0]))).leaveWhitespace().setParseAction(lambda _: name)
     Number = Regex("[0-9]+")
     Float = Regex("[0-9.]+")
+    wrap = lambda f:  {name : f }
+    id = lambda x: x 
     opt_parse_funcs = {
-            bool : lambda _: flag.setParseAction(lambda _: True), # so it must default to False somehow
-            int  : lambda _: flag + Number().setParseAction(int),
+            bool : lambda _: ZeroOrMore(flag).setParseAction(lambda x: [name, bool(x)]), # so it must default to False somehow
+            int  : lambda _: flag + Number().setParseAction(lambda x: int(x[0])),
             float  : lambda _: flag + Float().setParseAction(float),
-            str    : lambda _: flag + Word(alphas),
-            Optional : lambda x: Just('[') + flag + x + Just(']'),
-            List : lambda x: flag + listOf(x[0]),
+            str    : lambda _: (flag + Word(alphas)),
+            Optional : lambda x: ParseOpt(x),
+            #List : lambda x: flag + White() + listOf(next(x)),
+            List : lambda x: delimitedList(next(x), White()),
             object : lambda x: flag + Word(alphas).setParseAction(x),
-            #Enum : handle_NT_parser,
-            Union : lambda xs: Just('(') + reduce(operator.ior, xs) + Just(')') # this works because NTs will get resolved to parsers
+            NamedTuple : lambda x: Literal(x.__name__).setParseAction(lambda _: x),
+            Union : lambda xs: flag + reduce(operator.ior, xs)
     }
     option = traverse_type(type, opt_parse_funcs)
     return option
@@ -45,3 +50,15 @@ parsed = starmap(make_option_parser, ExampleOpts._field_types.items())
 parsed = list(parsed)
 print(list(parsed))
 
+from test_usage import * 
+TrimOpts = NamedTuple('TrimOpts', 
+        [('paired',bool), 
+         ('trim_n', bool),
+         ('q', Optional[int]),
+         ('removebases', Optional[int]),
+         ('platforms', List[Platform])])
+Opts = NamedTuple('Opts', [('list', List[int])])
+opts = list(starmap(make_option_parser, Opts._field_types.items()))
+trim = starmap(make_option_parser, TrimOpts._field_types.items())
+trim = list(trim)
+trim

@@ -22,7 +22,7 @@ def traverse_type(x: type, tfuncs:  Dict[Union[Any,type], Callable[[Any], T]]) -
    if x in primitives:
        return tfuncs[x](x)
    elif is_NamedTuple(x):
-       return tfuncs[object](x) 
+       return tfuncs[NamedTuple](x) 
    elif issubclass(x, Union) and x.__union_params__[1] == type(None):
        #NOTE: Optional will get swallowed by Union otherwise,
        # because Optional is an alias for Union[T, None]
@@ -45,6 +45,7 @@ def traverse_type(x: type, tfuncs:  Dict[Union[Any,type], Callable[[Any], T]]) -
            vals = map(recur, params)
            return tfuncs[_type](vals)
        else:  # some other subclass
+           print(x)
            return tfuncs[object](x) 
 
 def make_str_func(flag: str) -> Dict[Any,Callable[[Any],str]]: # flag is empty in case of positional
@@ -56,6 +57,7 @@ def make_str_func(flag: str) -> Dict[Any,Callable[[Any],str]]: # flag is empty i
             int  : just(flag + '<int>'),
             float  : just(flag + '<float>'),
             object : lambda x: '<{}>'.format(x.__name__),
+            NamedTuple : lambda x: '<{}>'.format(x.__name__),
             Optional : '[ {} ]'.format,
             List : lambda xs: '{}...'.format(next(xs)),
             Union : lambda xs: flag + '( {} )'.format(' | '.join(xs)), # these last two will add `--` to the front . . .
