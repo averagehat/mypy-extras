@@ -1,9 +1,11 @@
-from pyparsing import delimitedList, Literal, Regex, Word, alphas, White, ZeroOrMore
+from pyparsing import delimitedList, Literal, Regex, Word, alphas, White, ZeroOrMore, Or, And
 from pyparsing import Optional as ParseOpt
+from toolz.dicttoolz import valfilter
 from gadt import * 
 from functools import reduce
 import operator
 from typing import * 
+is_Option = lambda x: issubclass(x, Union) and x.__union_params__[1] == type(None)
 listOf = lambda x: delimitedList(x, ' ') #.setAction(lambda s: s.split(',')) # not sure how works if x has a setAction already
 
         # NamedTuple represents args that are grouped together (by parens)
@@ -36,7 +38,7 @@ def make_option_parser(name: str, type: type) -> None:
             str    : lambda _: (flag + Word(alphas)),
             Optional : lambda x: ParseOpt(x),
             #List : lambda x: flag + White() + listOf(next(x)),
-            List : lambda x: delimitedList(next(x), White()),
+            List : lambda x: delimitedList(next(x), White()).setParseAction(lambda xs: [name , xs[1::2]]),
             object : lambda x: flag + Word(alphas).setParseAction(x),
             NamedTuple : lambda x: Literal(x.__name__).setParseAction(lambda _: x),
             Union : lambda xs: flag + reduce(operator.ior, xs)
@@ -45,12 +47,8 @@ def make_option_parser(name: str, type: type) -> None:
     return option
 ExampleOpts = NamedTuple('ExampleOpts', [('bool', bool),  ('str', str)])
 from itertools import starmap
-print(ExampleOpts._field_types.items())
-parsed = starmap(make_option_parser, ExampleOpts._field_types.items())
-parsed = list(parsed)
-print(list(parsed))
-
 from test_usage import * 
+pairs = lambda xs: [] if not xs else [(xs[0], xs[1])] + pairs(xs[2:]) 
 TrimOpts = NamedTuple('TrimOpts', 
         [('paired',bool), 
          ('trim_n', bool),
@@ -60,5 +58,58 @@ TrimOpts = NamedTuple('TrimOpts',
 Opts = NamedTuple('Opts', [('list', List[int])])
 opts = list(starmap(make_option_parser, Opts._field_types.items()))
 trim = starmap(make_option_parser, TrimOpts._field_types.items())
+items = TrimOpts._field_types.items()
 trim = list(trim)
-trim
+input = "-p MiSeq -p IonTorrent -q 99"
+#NOTE: may need to support optional files as input (not in options object)
+PFunc = Callable[...,Any]
+Parser = Any
+def func_parser(func: PFunc) -> Parser:
+    pos_args, opt_args = get_file_options_args(func)
+    opts_parser = options_parser(opt_args[0])
+    posparser = And([Word(alphas) for _ in range(len(pos_args))] + [opts_parser])
+    return posparser #+ White() +  opts_parser 
+
+def get_default_args(opt: Dict[str,type]) -> Dict[str,Optional[bool]]:
+    items = opt._field_types.items()
+    defaults = {k : None for k,v in items if is_Option(v)}
+    bools = {k : False for k,v in items if v == bool}
+    defaults.update(bools)
+    return defaults
+
+OptionNT = type
+def execute_func_parser(func: PFunc, string: Parser) -> Tuple[str,OptionNT]:
+    pos_args, opt_args = get_file_options_args(func)
+    Opt = opt_args[0]
+    defaults = get_default_args(Opt)
+    parser = func_parser(func)
+    raw_result = parser.parseString(string, parseAll=True)
+    just_opts = raw_result[len(pos_args):]
+    pos_files = raw_result[:len(pos_args)]
+    d = dict(pairs(just_opts))
+    defaults.update(d)
+    opt_obj = Opt(**defaults)
+    return pos_files, opt_obj
+
+def just_options_parse(opts: OptionNT, string: str) -> OptionNT:
+    defaults = get_default_args(opts)
+    parser = options_parser(opts)
+    raw_result = parser.parseString(string, parseAll=True)
+    d = dict(pairs(raw_result))
+    defaults.update(d)
+    return opts(**defaults) 
+
+def options_parser(opts: OptionNT) -> Parser: 
+    parsers = starmap(make_option_parser, opts._field_types.items())
+    return delimitedList(Or(parsers), White())
+#result = TrimOpts(**defaults)
+
+def func(f1: Fastq, f2: Fastq, opts: TrimOpts) -> PairedEnd:
+    print(f1, f2, opts)
+
+s = """A B --platforms <MiSeq> -p <Roche454> --removebases 2 --paired  --trim_n  --q 0"""
+#s = """--platforms MiSeq -p Roche454 --removebases 2 --paired  --trim_n  --q 0"""
+#parser = func_parser(func)
+
+#print(execute_func_parser(func, s))
+
