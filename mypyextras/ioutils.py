@@ -34,3 +34,23 @@ TrimOpts = NamedTuple('TrimOpts',
          ('q', Optional[int]),
          ('removebases', Optional[int]),
          ('platforms', List[Platform])])
+
+
+
+#"pattern matching" example
+def get_sequences(p: SeqFile) -> Iterator[str]:
+    with p.open('r') as f:
+        if isinstance(p, Fastq):
+            for x in  itertools.islice(f, 0, sys.maxsize, 4):
+                yield x
+        else:
+            return read_fasta(p)
+
+#alternatively could use NamedTuples: 
+# Fastq = NamedTuple('Fastq', [('name', str)])
+extensions =  { GZip    : ['gz'],
+    Fastq : ['fq', 'fastq'], 
+    Fasta : ['fa', 'fasta'], 
+    Bam :   ['bam'],
+    VCF : ['vcf']
+    }
