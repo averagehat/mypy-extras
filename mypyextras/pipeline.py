@@ -2,8 +2,10 @@ from ioutils import *
 from typing import * 
 from toolz import compose
 from gadt import partition
+from operator import itemgetter as get
 from toolz.dicttoolz import keyfilter
 from functools import partial, reduce
+
 
 FilterOpts = AlignOpts = NamedTuple("Warning", [])
 def gunzip(gz: GZip) -> Fastq:
@@ -33,29 +35,30 @@ def freebayes(bam: Bam, ref: Fasta) -> VCF:
 def consensus(bam: Bam, ref: Fasta, vcf: VCF) -> Fasta:
     pass # run consensus
 Func = Callable[...,Any]
-Node = Tuple[Func, Tuple[str,type], Tuple[str,type]]
+Node = Tuple[Func, Dict[str,type], Dict[str,type]]
 
 def get_pos_opt_args(func: Func) -> Node:
     annotations = func.__annotations__
-    pos_args, opt_args = partition(lambda x: x[0] == 'opts', annotations.items()) 
+    is_opt = lambda x: x[0] == 'opts' # type: (Tuple[str,type]) -> Tuple[str,type]
+    pos_args, opt_args = partition(is_opt, annotations.items()) 
     return func, dict(pos_args), dict(opt_args)
 
-def order_funcs(funcs: List[Func], input: Tuple[File,File]) -> List[Node]:
+def order_funcs(funcs: List[Func], input: Union[File, Tuple[File,File]]) -> List[Node]:
     nodes = map(get_pos_opt_args, funcs)
     def fill_opts(node: Node) -> Func:
         f, _, optargs = node
         if not optargs: return node
         assert len(optargs) == 1
-        #TODO: fill in options by their type.
+        #TODO: fill in options by their type. for now fill with None.
         return partial(f, **{next(iter(optargs.keys())) :  None}) , _, optargs
-
     filled_nodes = list(map(fill_opts, nodes))
     def top_sort(acc: List[Node], to_go: List[Node]) -> List[Node]:
         if to_go == []: return acc
         def is_satisfied(node: Node) -> bool:
             f, args, _ = node
             required = keyfilter(lambda x: x != 'return', args) #rettype = args['return']
-            acc_rets = map(lambda x: x[1]['return'], acc)
+            get_ret = lambda x: x[1]['return'] # type: (Node) -> type
+            acc_rets = map(get_ret, acc)
             acc_rets = list(acc_rets)
             satisfied = all([(t in acc_rets) for t in required.values()])
             return satisfied
@@ -67,7 +70,7 @@ def order_funcs(funcs: List[Func], input: Tuple[File,File]) -> List[Node]:
 
 def build_pipeline(funcs: List[Func], input) -> Func:
     nodes = order_funcs(funcs, input)
-    ordered_funcs = map(lambda x: x[0], nodes)
+    ordered_funcs = map(get(0), nodes)
     return reduce(compose, ordered_funcs)
 
 funcs = [consensus, freebayes, tagbam, align_paired, filter_fastq, trim_fastq, gunzip]

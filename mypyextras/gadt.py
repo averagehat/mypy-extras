@@ -70,7 +70,7 @@ def make_tostr_option(nt: NamedTuple) -> str:
     strings = [traverse_type(_type, make_str_func(field)) for field, _type in nt._field_types.items()]
     return ' '.join(strings)
 
-def partition(pred: Callable[[T], bool], seq: List[T]) -> Tuple[List[T], List[T]]:
+def partition(pred: Callable[[T], bool], seq: Iterator[T]) -> Tuple[Iterator[T], Iterator[T]]:
     _not = lambda f: lambda x: not f(x) # type: Callable[[Callable[[T], bool]],Callable[[T], bool]]
     return filter(_not(pred), seq), filter(pred, seq)
 #Fastq = NamedTuple('Fastq', [('name', str)])
