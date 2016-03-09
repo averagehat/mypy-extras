@@ -1,5 +1,5 @@
 from typing import Tuple, Dict, Union, Optional, NamedTuple, List, \
-        Callable, Any, TypeVar
+        Callable, Any, TypeVar, Iterator
 from path import Path
 from toolz.dicttoolz import merge
 T = TypeVar("T")
@@ -9,12 +9,12 @@ t_params = {
         Union :    lambda x: x.__union_params__,
         Optional : lambda x: x.__union_params__[0],
         List :     lambda x: x.__parameters__
-}
+        } # type: Dict[type, Callble[type, Sequence[type]]]
 
 primitives = [str   , int   , bool  , float , type(None), bytes ]
 
 is_NamedTuple = lambda x:  hasattr(x, '_fields') # type: Callable[[type], bool]
-is_Option = lambda x: issubclass(x, Union) and x.__union_params__[1] == type(None)
+is_Option = lambda x: issubclass(x, Union) and x.__union_params__[1] == type(None) # type: Callable[[type], bool]
 
 def traverse_type(x: type, tfuncs:  Dict[Union[Any,type], Callable[[Any], T]]) -> T:
    # it's unclear how to type the below lambda because it's dependent on T,
@@ -90,3 +90,20 @@ def gen_usage_for_function(func):
     string += ' ' 
     string += ' '.join(map(make_tostr_option, opt_args))
     return string
+
+
+class Fastq(Path): pass
+MiSeq = NamedTuple("MiSeq", [])
+Roche454 = NamedTuple("Roche454", [])
+IonTorrent = NamedTuple("IonTorrent", [])
+Platform = Union[MiSeq,Roche454,IonTorrent]
+PairedEnd = Tuple[Fastq, Fastq]
+
+TrimOpts = NamedTuple('TrimOpts', 
+        [('paired',bool), 
+         ('trim_n', bool),
+         ('q', Optional[int]),
+         ('removebases', Optional[int]),
+         ('platforms', List[Platform])])
+
+

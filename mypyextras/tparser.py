@@ -1,4 +1,5 @@
 from pyparsing import delimitedList, Literal, Regex, Word, alphas, White, ZeroOrMore, Or, And
+from itertools import starmap
 from pyparsing import Optional as ParseOpt
 from toolz.dicttoolz import valfilter
 from gadt import * 
@@ -46,15 +47,8 @@ def make_option_parser(name: str, type: type) -> None:
     option = traverse_type(type, opt_parse_funcs)
     return option
 ExampleOpts = NamedTuple('ExampleOpts', [('bool', bool),  ('str', str)])
-from itertools import starmap
-from test_usage import * 
+
 pairs = lambda xs: [] if not xs else [(xs[0], xs[1])] + pairs(xs[2:]) 
-TrimOpts = NamedTuple('TrimOpts', 
-        [('paired',bool), 
-         ('trim_n', bool),
-         ('q', Optional[int]),
-         ('removebases', Optional[int]),
-         ('platforms', List[Platform])])
 Opts = NamedTuple('Opts', [('list', List[int])])
 opts = list(starmap(make_option_parser, Opts._field_types.items()))
 trim = starmap(make_option_parser, TrimOpts._field_types.items())

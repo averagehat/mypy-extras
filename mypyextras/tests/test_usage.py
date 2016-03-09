@@ -1,21 +1,21 @@
 
 from path import Path
 from typing import Tuple, Dict, Union, Optional, NamedTuple, List, Callable
-from gadt import gen_usage_for_function
+from mypyextras.gadt import gen_usage_for_function, TrimOpts
 #Fastq = NamedTuple('Fastq', [('name', str)])
-class Fastq(Path): pass
-MiSeq = NamedTuple("MiSeq", [])
-Roche454 = NamedTuple("Roche454", [])
-IonTorrent = NamedTuple("IonTorrent", [])
-Platform = Union[MiSeq,Roche454,IonTorrent]
-PairedEnd = Tuple[Fastq, Fastq]
-
-TrimOpts = NamedTuple('TrimOpts', 
-        [('paired',bool), 
-         ('trim_n', bool),
-         ('q', Optional[int]),
-         ('removebases', Optional[int]),
-         ('platforms', List[Platform])])
+#class Fastq(Path): pass
+#MiSeq = NamedTuple("MiSeq", [])
+#Roche454 = NamedTuple("Roche454", [])
+#IonTorrent = NamedTuple("IonTorrent", [])
+#Platform = Union[MiSeq,Roche454,IonTorrent]
+#PairedEnd = Tuple[Fastq, Fastq]
+#
+#TrimOpts = NamedTuple('TrimOpts', 
+#        [('paired',bool), 
+#         ('trim_n', bool),
+#         ('q', Optional[int]),
+#         ('removebases', Optional[int]),
+#         ('platforms', List[Platform])])
 def func(f1: Fastq, f2: Fastq, opts: TrimOpts) -> PairedEnd:
     print(f1, f2, opts)
 
