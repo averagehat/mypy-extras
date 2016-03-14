@@ -1,69 +1,11 @@
 from ioutils import *
-from typing import * 
 from toolz import compose
 from gadt import partition
 from operator import itemgetter as get
 from toolz.dicttoolz import keyfilter
 from functools import partial, reduce
 
-class StatsFile(File): pass
-class FastaIndex(File): pass
-
-TagBamOptions = NamedTuple("TagBamOptions",
-                          [('CN', Optional[str]),
-                           ('SM', Optional[str])])
-
-FilterOpts = NamedTuple("FilterOpts",
-                        [('indexQualMin', int),
-                         ('drop_ns', bool),
-                         ('platforms', List[Platform])])
-
-def gunzip(gz: GZip) -> Fastq:
-    sh.gunzip(gz.name)
-    return Fastq(gz.drop("gz"))
-
-def samtools_flagstats(bam: Bam) -> StatsFile:
-    sh.samtools.flagstats(bam, _iter=True)
-    statsFile = StatsFile("flagstats.txt") 
-    fields = ['in total', 'duplicates', ' mapped (', 'paired in sequencing', 'read1', 'read2', 'properly paired', 'with itself and mate mapped', 'singletons']
-    with statsFile.open('w') as out:
-        fieldsInLine = lambda s: filter(s.__contains__, fields) # type: Callable[[str], Iterable[str]]
-        counts = Counter(map(fieldsInLine, stats))
-        lines = starmap("{}{}".format, counts.items())
-        out.writelines(lines)
-    return statsFile
-
-def trim_fastq(fqs: PairedEnd, opts: TrimOpts) -> PairedEnd:
-    cmd = sh.cutadapt.bake(removebases=opts.removebases, qualcutoff=opts.qualcutoff, trim_n=opts.trim_n)
-    cmd(fwd, rev)
-    return Fastq(fwd.trim), Fastq(rev.trim)
-
-def filter_fastq(fqs: PairedEnd, opts: FilterOpts) -> PairedEnd:
-    pass # run filter
-
-def align_paired(fqs: PairedEnd, ref: FastaIndex) -> Bam:
-    sh.bwa.mem(*fqs)
-    return Bam("paired.bam")
-
-
-def tagbam(bam: Bam, opts: TagBamOptions) -> Bam:
-    sh.tagreads(bam, CN=opts.CN, SM=opts.SM); return bam
-
-def freebayes(bam: Bam, ref: Fasta) -> VCF:
-    vcf = VCF("freebayes.vcf")
-    sh.freebayes(bam, f=ref, _out=vcf.name)
-    return vcf
-
-
-def index_fasta(f: Fasta) -> List[IndexFasta]:
-    index_extensions = ['amb', 'ann', 'bwt', 'pac', 'sa']
-    outputs = [IndexFasta(getattr(f, ext)) for ex in index_extensions]
-    sh.bowtie.index(f); return outputs
-
-def consensus(bam: Bam, ref: Fasta, vcf: VCF) -> Fasta:
-    pass # run consensus
-Func = Callable[...,Any]
-Node = Tuple[Func, Dict[str,type], Dict[str,type]]
+Node = Tuple[Callable[...,Any], Dict[str,type], Dict[str,type]]
 
 def get_pos_opt_args(func: Callable[...,Any]) -> Node:
     annotations = func.__annotations__
@@ -71,9 +13,9 @@ def get_pos_opt_args(func: Callable[...,Any]) -> Node:
     pos_args, opt_args = partition(is_opt, annotations.items()) 
     return func, dict(pos_args), dict(opt_args)
 
-def order_funcs(funcs: List[Func], input: Union[File, Tuple[File,File]]) -> List[Node]:
+def order_funcs(funcs: List[Callable[...,Any]], input: Union[File, Tuple[File,File]]) -> List[Node]:
     nodes = map(get_pos_opt_args, funcs)
-    def fill_opts(node: Node) -> Func:
+    def fill_opts(node: Node) -> Callable[...,Any]:
         f, _, optargs = node
         if not optargs: return node
         assert len(optargs) == 1
@@ -96,16 +38,16 @@ def order_funcs(funcs: List[Func], input: Union[File, Tuple[File,File]]) -> List
     sorted = top_sort([input], filled_nodes)
     return sorted
 
-def build_pipeline(funcs: List[Func], input) -> Func:
+def build_pipeline(funcs: List[Callable[...,Any]], input) -> Callable[...,Any]:
     nodes = order_funcs(funcs, input)
     ordered_funcs = map(get(0), nodes)
     return reduce(compose, ordered_funcs)
 
-funcs = [consensus, freebayes, tagbam, align_paired, filter_fastq, trim_fastq, gunzip]
-res = build_pipeline(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, []))
-print(res)
-nodes = (order_funcs(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, [])))
-print(nodes)
+#funcs = [consensus, freebayes, tagbam, align_paired, filter_fastq, trim_fastq, gunzip]
+#res = build_pipeline(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, []))
+#nodes = (order_funcs(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, [])))
+#print(res)
+#print(nodes)
 # file_funcs = dir(__file__)
 
 # most, if not all the difficulty of writing this could've been mitigated by pinning down the types . . . 

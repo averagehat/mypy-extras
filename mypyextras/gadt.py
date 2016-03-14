@@ -7,9 +7,9 @@ t_params = {
         Tuple :    lambda x: x.__tuple_params__,
         Dict  :    lambda x: x.__parameters__,
         Union :    lambda x: x.__union_params__,
-        Optional : lambda x: x.__union_params__[0],
+#        Optional : lambda x: x.__union_params__[0],
         List :     lambda x: x.__parameters__
-        } # type: Dict[type, Callble[type, Sequence[type]]]
+        } # type: Dict[type, Callable[type, Sequence[type]]]
 
 primitives = [str   , int   , bool  , float , type(None), bytes ]
 

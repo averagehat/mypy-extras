@@ -66,3 +66,9 @@ def index_fasta(f: Fasta) -> List[FastaIndex]:
 
 def consensus(bam: Bam, ref: Fasta, vcf: VCF) -> Fasta:
     pass # run consensus
+
+
+required_order = [tagbam, freebayes]
+
+
+

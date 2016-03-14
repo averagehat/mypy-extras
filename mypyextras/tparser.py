@@ -101,7 +101,7 @@ def options_parser(opts: OptionNT) -> Parser:
 def func(f1: Fastq, f2: Fastq, opts: TrimOpts) -> PairedEnd:
     print(f1, f2, opts)
 
-s = """A B --platforms <MiSeq> -p <Roche454> --removebases 2 --paired  --trim_n  --q 0"""
+#s = """A B --platforms <MiSeq> -p <Roche454> --removebases 2 --paired  --trim_n  --q 0"""
 #s = """--platforms MiSeq -p Roche454 --removebases 2 --paired  --trim_n  --q 0"""
 #parser = func_parser(func)
 
