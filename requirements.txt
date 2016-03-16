@@ -1,0 +1,12 @@
+typing 
+argparse
+hypothesis
+
+# uitilites
+toolz
+
+# pipeline
+path.py
+sh
+plumbum
+pyyaml

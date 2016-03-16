@@ -43,12 +43,3 @@ def build_pipeline(funcs: List[Callable[...,Any]], input) -> Callable[...,Any]:
     ordered_funcs = map(get(0), nodes)
     return reduce(compose, ordered_funcs)
 
-#funcs = [consensus, freebayes, tagbam, align_paired, filter_fastq, trim_fastq, gunzip]
-#res = build_pipeline(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, []))
-#nodes = (order_funcs(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, [])))
-#print(res)
-#print(nodes)
-# file_funcs = dir(__file__)
-
-# most, if not all the difficulty of writing this could've been mitigated by pinning down the types . . . 
-# worth biting the bullet, especially for higher-order functions right now
