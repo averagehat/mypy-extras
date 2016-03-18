@@ -1,5 +1,12 @@
+### Mini-Packages
+* `args.py`
+* `hypotypes.py` (now a PR to DRMacIver/hypothesis)
+* `pipeline.py`
 
-Define file inputs. Alternatively subclass typing.io.TextIO to be okay with sdin/stdout
+
+### pipeline.py
+
+Define file inputs. (Alternatively subclass typing.io.TextIO to be okay with sdin/stdout)
 
 ```python 
 from path import Path
@@ -40,18 +47,17 @@ if __name__ == '__main__':
     command = command.sub_commands(trim_reads, prep_fastq)
     command.run()
 ```
+
+### `args.py`
 Usage statement
 ```bash
 <Fastq> <Fastq> --platforms ( <MiSeq> | <Roche454> | <IonTorrent> )... --trim_n  [ --removebases <int> ] --paired  --adapters <str>... [ --q <int> ]
 ```
-Commandline Parsing
-```
-Works if you wrap everything that's required in the NamedTuple. Combining with positional arguments not yet working.
-```
+old version (in `old/gadt.py`) (using `pyparsing`) works if you wrap everything that's required in the NamedTuple. Combining with positional arguments not yet working. Also, `Each` didn't seem to work correctly without hanging forever.
+New version uses `argparse`.
 
 ###TODO:
 It should be possible to automate commandline testing using hypotypes + typarser. All possible commandline-combinations would get run and you could check the properties one at a time, i.e., --csv flag means output should be in csv format, etc. This could report the exact commandline string.
 
 parse/unparse tests for the parser/usage generator
 
-typesafe pipelines could be created by matching up the types of inputs (using ADTs, e.g. `CSVFile`, etc.) to form the DAG. 
