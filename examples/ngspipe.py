@@ -68,7 +68,12 @@ def consensus(bam: Bam, ref: Fasta, vcf: VCF) -> Fasta:
     pass # run consensus
 
 
-required_order = [tagbam, freebayes]
+#required_order = [tagbam, freebayes]
 
+id = lambda x: x
+funcs = [consensus, freebayes, tagbam, align_paired, filter_fastq, trim_fastq, gunzip]
+nodes = (order_funcs(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, [])))
 
+runner = build_pipeline(funcs, (id, {'return' : Tuple[Fastq, Fastq]}, []))
 
+# file_funcs = dir(__file__)

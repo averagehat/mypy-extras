@@ -1,6 +1,9 @@
 from typing import Generic, Callable, TypeVar
 from abc import abstractmethod
 import operator
+'''
+Mypy doesn't actually support type classes. But you can generate the code for instances if you want to.
+Here are some examples of what that would look like.'''
 
 A = TypeVar('A')
 B = TypeVar('B')
@@ -10,6 +13,7 @@ class Applicative(Generic[A]):
     def map(self, f: Callable[[A], B])-> 'Applicative[B]': pass
     @abstractmethod
     def apply(self, fa: 'Applicative[Callable[[A],B]]') -> 'Applicative[B]': pass
+
 class Maybe(Applicative, Generic[A]):
     # have to override here to avoid upcasting
     @abstractmethod
@@ -60,7 +64,8 @@ j2 = Just(12).map(add1).map(add1).getOrElse("asdf") # fails
 j = Just("SDF").map(add1) # fails
 #Func1 = Callable[[A],B]
 #Func2 = Callable[[A,B],C]
-# https://github.com/python/mypy/issues/1037
+# see https://github.com/python/mypy/issues/1037
+
 def curry(f: Callable[[A,B],C]) -> Callable[[A],Callable[[B],C]]:
     return lambda x: lambda y: f(x, y) # type: Callable[[A],Callable[[B],C]]
 def compose(f: Callable[[A],B], g: Callable[[B],C]) -> Callable[[A],C]:
@@ -100,5 +105,5 @@ def lift2Maybe(f: Callable[[A,B],C], ma: Maybe[A], mb: Maybe[B]) -> Maybe[C]:
     return mb.apply(ma.map(cf))
 
 j = Just(12).map(add1).map(add1)
-print(j) # why does this work but apply doesnt?
+print(j) # why does this work but apply doesnt? parameters are not covariant, but return types are.
 
