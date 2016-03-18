@@ -19,11 +19,11 @@ class TestArgs(unittest.TestCase):
         self.assertEqual(expected, res)
 
 
-        def test_with_positional_arguments(self):
-            p = (dict2argparser(filter_fastq.__annotations__))
-            res = (p.parse_args(['R1', 'R2', '--platforms', 'MiSeq',   '--indexQualMin', '10'])) 
-            Namespace(drop_ns=False, fwd=Fastq('R2'), indexQualMin=10, platforms=[MiSeq()], rev=Fastq('R1'))
-            self.assertEqual(expected, res)
+    def test_with_positional_arguments(self):
+        p = (dict2argparser(filter_fastq.__annotations__))
+        res = (p.parse_args(['R1', 'R2', '--platforms', 'MiSeq',   '--indexQualMin', '10'])) 
+        Namespace(drop_ns=False, fwd=Fastq('R2'), indexQualMin=10, platforms=[MiSeq()], rev=Fastq('R1'))
+        self.assertEqual(expected, res)
     
     #def test_optional_is_not_required
     #def test_non_optional_is_required
