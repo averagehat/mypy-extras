@@ -16,8 +16,8 @@ compose = lambda f,g: lambda *x: f(g(*x))
 
 is_namedtuple = lambda t: hasattr(t, '_fields')
 
-def type_to_argparse(t: type, p: ArgumentParser, default: Optional[Any]) -> Dict[str,Any]:
-   to_argparse = lambda x: type_to_argparse(x, p, None)
+def type_to_argparse(t: type, p: ArgumentParser, default: Optional[Any], defaults: Dict[str,Any]) -> Dict[str,Any]:
+   to_argparse = lambda x: type_to_argparse(x, p, None, defaults)
    primitives  = [int, str, float, unicode, bytes]
 
 
@@ -35,7 +35,7 @@ def type_to_argparse(t: type, p: ArgumentParser, default: Optional[Any]) -> Dict
 
    elif is_namedtuple(t):
        for name, typ in t._field_types.items():
-           d = to_argparse(typ)
+           d = type_to_argparse(typ, p, defaults.get(name), defaults)
            if 'required' not in d and d.get('action') != 'store_true':
                d['required'] = True
            p.add_argument('--'+name, **d)
@@ -47,9 +47,19 @@ def type_to_argparse(t: type, p: ArgumentParser, default: Optional[Any]) -> Dict
            return to_argparse(List[element_type])
        raise NotImplemented("Well-defined tuples not supported")
 
+   #elif issubclass(t, Optional): # optional must come before union
+   elif issubclass(t, Union) and t.__union_params__[1] is type(None): # optional must come before union
+       rest = to_argparse(t.__union_params__[0]) or {}
+       # Only optional options can have defaults
+       if default is not None:
+           rest.update(default=default)
+       rest.update(required=False)
+       return rest
+       #p.add_argument(name, required=False, **rest)
+
    elif issubclass(t, Union):
        params = t.__union_params__
-       assert all(map(is_enum, params))
+       assert all(map(is_enum, params)), "%s is a Union, should be an enum" % t
        choices = list(map(lambda x: x(), params))
        def choice(s: str) -> NamedTuple:
            try:
@@ -60,12 +70,6 @@ def type_to_argparse(t: type, p: ArgumentParser, default: Optional[Any]) -> Dict
            #("Needed one of %s" % ' '.join(map(lambda x: x.__name__, params)))
        return dict(type=choice, choices=choices)
 
-   elif issubclass(t, Optional):
-       rest = to_argparse(t.__union_params__[0]) or {}
-       # Only optional options can have defaults
-       if default is not None:
-           rest.update(default=default)
-       p.add_argument(flag, required=False, **rest)
 
    elif issubclass(t, list):
        element_type = to_argparse(t.__parameters__[0])
@@ -77,7 +81,7 @@ def type_to_argparse(t: type, p: ArgumentParser, default: Optional[Any]) -> Dict
 
 def get_ordered_annotations(func):
     ann = func.__annotations__
-    argnames = func.__code__.co_varnames
+    argnames = func.__code__.co_varnames[:func.__code__.co_argcount]
     od = OrderedDict()
     for a in argnames:
         od[a] = ann[a]
@@ -87,7 +91,7 @@ def dict2argparser(args, defaults):
        del args['return']
    a = argparse.ArgumentParser()
    for name, t in args.items():
-      d =  type_to_argparse(t, a, defaults.get(name))
+      d =  type_to_argparse(t, a, defaults.get(name), defaults)
       if d:
           a.add_argument(name, **d)
    return a
@@ -117,7 +121,7 @@ def func2parsed(func,  defaults: Dict[str,Any]) -> Tuple[ArgumentParser, Callabl
     # intended usage: func(**extract_nts(p.parse_args()))
     return p, extract_args
 
-def run_args(func):
-    p, extract_args = func2parsed(func)
+def run_args(func, defaults):
+    p, extract_args = func2parsed(func, defaults)
     return func(**extract_args(p.parse_args()))
 
